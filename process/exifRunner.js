@@ -4,7 +4,7 @@ const EXIF_PATH = "C:\\ExifTool\\exiftool.exe";
 
 function runExifTool(csvPath, imageFolder) {
   return new Promise((resolve, reject) => {
-    const command = `"C:\\ExifTool\\exiftool.exe" -csv="${csvPath}" -overwrite_original "${imageFolder}"`;
+    const command = `"C:\\ExifTool\\exiftool.exe" -csv="${csvPath}" -overwrite_original "${imageFolder}" -ignoreMinorErrors -m`;
     exec(command, (error, stdout, stderr) => {
       if (error) {
         console.error("ExifTool Error:", stderr);
