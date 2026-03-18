@@ -1,5 +1,6 @@
 const readline = require("readline");
 const fs = require("fs");
+const path = require("path");
 
 const { parseExcel } = require("./process/excelParser");
 const { matchImages } = require("./process/matcher");
@@ -41,14 +42,20 @@ function ask(question) {
     // Step 5: Logs
     fs.writeFileSync("./logs/missing.txt", missing.join("\n"));
 
-    console.log("✔ Processing complete");
-    console.log(`✔ Matched: ${matched.length}`);
-    console.log(`⚠ Missing: ${missing.length}`);
+    console.log("✔ Processing complete\n");
     
+    // Show matched files
+    console.log(`Modified images with Coordinates data provided in the Excel: ${matched.length}`);
+    matched.forEach((item, index) => {
+      const fileName = path.basename(item.filePath);
+      console.log(`${index + 1}. ${fileName}`);
+    });
+    
+    // Show missing files
+    console.log(`\nFiles without GPS coordinates in excel: ${missing.length}`);
     if (missing.length > 0) {
-      console.log("\n⚠ Files without GPS coordinates in Excel:");
       missing.forEach((file, index) => {
-        console.log(`   ${index + 1}. ${file}`);
+        console.log(`${index + 1}. ${file}`);
       });
     }
 
