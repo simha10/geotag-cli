@@ -27,6 +27,11 @@ function ask(question) {
 
     console.log("\nProcessing...\n");
 
+    // Ensure temp and logs directories exist
+    ["./temp", "./logs"].forEach(dir => {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    });
+
     // Step 1: Parse Excel
     const excelData = parseExcel(excelPath);
 
@@ -35,6 +40,8 @@ function ask(question) {
 
     // Step 3: Generate CSV
     const csvPath = generateCSV(matched);
+    console.log(`CSV generated at: ${csvPath}`);
+    console.log(`Matched images count: ${matched.length}\n`);
 
     // Step 4: Run ExifTool
     await runExifTool(csvPath, imageFolder);
