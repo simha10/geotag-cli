@@ -7,8 +7,8 @@ function generateCSV(data) {
   const rows = ["SourceFile,GPSLatitude,GPSLongitude"];
 
   data.forEach(item => {
-    // ExifTool handles spaces natively - no quotes needed
-    rows.push(`${item.filePath},${item.lat},${item.long}`);
+    // Always wrap file paths in quotes to handle spaces correctly
+    rows.push(`"${item.filePath}",${item.lat},${item.long}`);
   });
 
   fs.writeFileSync(csvPath, rows.join("\n"), "utf8");
