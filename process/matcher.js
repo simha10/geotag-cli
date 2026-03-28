@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VALID_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+const VALID_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
 
 function getBaseName(file) {
   return path.parse(file).name.toLowerCase().trim();
@@ -21,11 +21,10 @@ function matchImages(imageFolder, excelData) {
   }));
 
   const matched = [];
-  const excelMissing = []; // Excel entries not found in folder
-  const imageMissing = []; // Images without Excel data
+  const excelMissing = [];
+  const imageMissing = [];
   const matchedFileNames = new Set();
 
-  // Match Excel entries to images
   excelData.forEach(row => {
     if (!row.image_name) {
       excelMissing.push("invalid_row (empty filename)");
@@ -33,14 +32,15 @@ function matchImages(imageFolder, excelData) {
     }
 
     const targetBase = getBaseName(row.image_name);
-
     const found = normalizedFiles.find(f => f.base === targetBase);
 
     if (found) {
       matched.push({
         filePath: path.join(imageFolder, found.original),
         lat: row.lat,
-        long: row.long
+        latRef: row.latRef,       // ✅ FIX: pass through reference tags
+        long: row.long,
+        longRef: row.longRef      // ✅ FIX: pass through reference tags
       });
       matchedFileNames.add(found.original);
     } else {
@@ -48,7 +48,6 @@ function matchImages(imageFolder, excelData) {
     }
   });
 
-  // Find images that don't have Excel entries
   normalizedFiles.forEach(file => {
     if (!matchedFileNames.has(file.original)) {
       imageMissing.push(file.original);

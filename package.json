@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-       "start": "node index.js"
+    "test": "node test.js",
+    "test:clean": "node -e \"const fs=require('fs'); const path=require('path'); ['test_images', 'test_coordinates.xlsx', 'temp/metadata.csv'].forEach(f => { const p = path.join(__dirname, f); if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true }); }); console.log('Test files cleaned up');\"",
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",

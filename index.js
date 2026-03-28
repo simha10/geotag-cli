@@ -2,7 +2,7 @@ const readline = require("readline");
 const fs = require("fs");
 const path = require("path");
 
-const { parseExcel } = require("./process/excelParser");
+const { parseExcel }  = require("./process/excelParser");
 const { matchImages } = require("./process/matcher");
 const { generateCSV } = require("./process/csvGenerator");
 const { runExifTool } = require("./process/exifRunner");
@@ -22,109 +22,139 @@ function ask(question) {
 
 (async () => {
   try {
-    const imageFolder = cleanPath(await ask("Enter image folder path or Drag & drop image folder here: "));
-    const excelPath = cleanPath(await ask("Enter Excel file path or Drag & drop Excel file here: "));
+    const imageFolder = cleanPath(await ask("Enter image folder path or drag & drop here: "));
+    const excelPath   = cleanPath(await ask("Enter Excel file path or drag & drop here: "));
 
     console.log("\nProcessing...\n");
 
-    // Ensure temp and logs directories exist
     ["./temp", "./logs"].forEach(dir => {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     });
 
-    // Step 1: Parse Excel
+    // ── Step 1: Parse Excel ──────────────────────────────────────────────────
     console.log("📊 Step 1: Parsing Excel file...");
     const excelData = parseExcel(excelPath);
     console.log(`   Found ${excelData.length} entries in Excel\n`);
 
-    // Step 2: Match Images
+    // ── Step 2: Match images ─────────────────────────────────────────────────
     console.log("🔍 Step 2: Matching images with Excel data...");
     const { matched, excelMissing, imageMissing } = matchImages(imageFolder, excelData);
     console.log(`   Matched: ${matched.length} images`);
     console.log(`   Excel entries not found: ${excelMissing.length}`);
     console.log(`   Images without Excel data: ${imageMissing.length}\n`);
 
-    // Step 3: Generate CSV
+    if (matched.length === 0) {
+      console.log("⚠ No matching images found. Check that image_name values in Excel");
+      console.log("  match the filenames (without extension) in the image folder.\n");
+      rl.close();
+      return;
+    }
+
+    // ── Step 3: Generate CSV ─────────────────────────────────────────────────
     console.log("📝 Step 3: Generating CSV metadata file...");
     const csvPath = generateCSV(matched);
     console.log(`   CSV generated at: ${csvPath}\n`);
 
-    // Step 4: Run ExifTool
+    // ── Step 4: Run ExifTool (strip → write → validate) ──────────────────────
     console.log("📍 Step 4: Processing EXIF metadata...\n");
     const exifResult = await runExifTool(csvPath, imageFolder, matched);
 
-    // Step 5: Generate Logs
+    // ── Step 5: Write logs ───────────────────────────────────────────────────
     console.log("\n📋 Step 5: Generating logs...\n");
-    
-    // Write detailed log files
+
     fs.writeFileSync("./logs/excel_missing.txt", excelMissing.join("\n"));
     fs.writeFileSync("./logs/image_missing.txt", imageMissing.join("\n"));
-    
-    // Write failed updates log if there were failures
+
     if (exifResult.errors && exifResult.errors.length > 0) {
       fs.writeFileSync("./logs/failed_updates.txt", exifResult.errors.join("\n"));
     }
 
+    if (exifResult.validation?.invalidFiles?.length > 0) {
+      const validationLog = exifResult.validation.invalidFiles
+        .map(f => {
+          if (f.error) return `${f.file}: ${f.error}`;
+          const missing = Object.entries(f.missing || {})
+            .filter(([, v]) => v)
+            .map(([k]) => k)
+            .join(", ");
+          return `${f.file}: Missing ${missing}`;
+        })
+        .join("\n");
+      fs.writeFileSync("./logs/gps_validation.txt", validationLog);
+    }
+
+    // ── Summary report ───────────────────────────────────────────────────────
     console.log("✔ Processing complete\n");
     console.log("=".repeat(60));
     console.log("📊 SUMMARY REPORT");
     console.log("=".repeat(60));
-    console.log(`✔ Total images scanned:         ${matched.length + imageMissing.length}`);
-    console.log(`✔ Matched & updated:            ${exifResult.updatedCount || matched.length}`);
-    console.log(`❌ Excel entries not found:     ${excelMissing.length}`);
-    console.log(`❌ Images without Excel data:   ${imageMissing.length}`);
-    console.log(`⚠ Failed updates:               ${exifResult.failedCount || 0}`);
+    console.log(`✔ Total images scanned:           ${matched.length + imageMissing.length}`);
+    console.log(`✔ Matched & updated:              ${exifResult.updatedCount || matched.length}`);
+    console.log(`❌ Excel entries not found:       ${excelMissing.length}`);
+    console.log(`❌ Images without Excel data:     ${imageMissing.length}`);
+    console.log(`⚠  Failed updates:                ${exifResult.failedCount || 0}`);
+    if (exifResult.validation) {
+      console.log(`✅ GIS-compatible (all 4 tags):   ${exifResult.validation.valid} files`);
+      console.log(`⚠  Incomplete GPS metadata:       ${exifResult.validation.invalid} files`);
+    }
     console.log("=".repeat(60));
-    
+
     // Show matched files
     if (matched.length > 0) {
-      console.log(`\n✔ Modified images with GPS coordinates (${matched.length}):`);
-      matched.forEach((item, index) => {
-        const fileName = path.basename(item.filePath);
-        console.log(`   ${index + 1}. ${fileName}`);
+      console.log(`\n✔ Images geotagged (${matched.length}):`);
+      matched.forEach((item, i) => {
+        const name = path.basename(item.filePath);
+        console.log(`   ${i + 1}. ${name}  (${item.lat}°${item.latRef}, ${item.long}°${item.longRef})`);
       });
     }
-    
+
     // Show Excel entries not found
     if (excelMissing.length > 0) {
       console.log(`\n❌ Excel entries not found in folder (${excelMissing.length}):`);
-      excelMissing.slice(0, 10).forEach((file, index) => {
-        console.log(`   ${index + 1}. ${file}`);
-      });
+      excelMissing.slice(0, 10).forEach((f, i) => console.log(`   ${i + 1}. ${f}`));
       if (excelMissing.length > 10) {
         console.log(`   ... and ${excelMissing.length - 10} more (see logs/excel_missing.txt)`);
       }
     }
-    
+
     // Show images without Excel data
     if (imageMissing.length > 0) {
-      console.log(`\n❌ Images without GPS coordinates in Excel (${imageMissing.length}):`);
-      imageMissing.slice(0, 10).forEach((file, index) => {
-        console.log(`   ${index + 1}. ${file}`);
-      });
+      console.log(`\n❌ Images without GPS coordinates (${imageMissing.length}):`);
+      imageMissing.slice(0, 10).forEach((f, i) => console.log(`   ${i + 1}. ${f}`));
       if (imageMissing.length > 10) {
         console.log(`   ... and ${imageMissing.length - 10} more (see logs/image_missing.txt)`);
       }
     }
-    
-    // Show failed updates if any
-    if (exifResult.failedCount > 0 || (exifResult.errors && exifResult.errors.length > 0)) {
-      console.log(`\n⚠ Failed updates (${exifResult.failedCount || exifResult.errors.length}):`);
-      console.log(`   Check logs/failed_updates.txt for details`);
+
+    // Show validation failures
+    if (exifResult.validation?.invalidFiles?.length > 0) {
+      console.log(`\n⚠ GIS validation failures (${exifResult.validation.invalid}):`);
+      exifResult.validation.invalidFiles.slice(0, 10).forEach(f => {
+        const missing = f.error
+          ? f.error
+          : Object.entries(f.missing || {}).filter(([, v]) => v).map(([k]) => k).join(", ");
+        console.log(`   • ${f.file}: missing ${missing}`);
+      });
+      console.log("   (see logs/gps_validation.txt for full list)");
     }
-    
-    console.log("\n📁 Log files generated:");
-    console.log("   - logs/excel_missing.txt (Excel entries not found)");
-    console.log("   - logs/image_missing.txt (Images without Excel data)");
-    if (exifResult.errors && exifResult.errors.length > 0) {
-      console.log("   - logs/failed_updates.txt (Processing errors)");
+
+    // Show failed updates
+    if (exifResult.failedCount > 0) {
+      console.log(`\n⚠ Failed updates: ${exifResult.failedCount}`);
+      console.log("   See logs/failed_updates.txt for details");
     }
+
+    console.log("\n📁 Log files:");
+    console.log("   • logs/excel_missing.txt");
+    console.log("   • logs/image_missing.txt");
+    if (exifResult.errors?.length > 0)                      console.log("   • logs/failed_updates.txt");
+    if (exifResult.validation?.invalidFiles?.length > 0)    console.log("   • logs/gps_validation.txt");
     console.log();
 
     rl.close();
 
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("❌ Error:", err.message || err);
     rl.close();
   }
 })();
