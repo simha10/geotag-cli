@@ -13,7 +13,16 @@ const rl = readline.createInterface({
 });
 
 function cleanPath(p) {
-  return p.replace(/^"(.*)"$/, "$1").trim();
+  if (!p || typeof p !== 'string') return '';
+  // Remove leading/trailing whitespace
+  let cleaned = p.trim();
+  // Remove PowerShell '& ' prefix if present (happens with drag & drop)
+  cleaned = cleaned.replace(/^&\s+/, '');
+  // Remove surrounding quotes (both single and double)
+  cleaned = cleaned.replace(/^["']|["']$/g, '');
+  // Handle escaped quotes that might appear in some terminals
+  cleaned = cleaned.replace(/^\\"|\\"$/g, '');
+  return cleaned;
 }
 
 function ask(question) {
